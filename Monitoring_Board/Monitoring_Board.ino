@@ -54,7 +54,7 @@ uint8_t* v_stdev;
 float CELL_BALANCE_THRESHOLD = 3.9;
 
 // Fan enable threshold
-float FAN_THRESHOLD = 40.0;
+float FAN_THRESHOLD = 40.0; //In degrees Celsius
 
 //Variable used when creating array, needed to use pow() function
 float hold_float = 0;
