@@ -1,8 +1,6 @@
 #include <SPI.h>
-#include "mcp_can/mcp_can.h"
-#include "Linduino/Linduino.h"
-#include "LTC68041/LTC68041.h"
-#include "LT_SPI/LT_SPI.h"
+#include "src/mcp_can/mcp_can.h"
+#include "src/LTC68041/LTC68041.h"
 
 //The arduino itself does not have the capability to use the CAN communication protocol
 //A separate module is used to enable CAN messageing, and the arduino is connected to this module 
@@ -36,12 +34,13 @@ uint8_t* avg;
 uint8_t* t_stdev;
 
 // These variables are utilized to store information from the LTC6804
-uint16_t cell_codes[12]; //Cell codes
-uint8_t tx_cfg[6]; //Configuration data written to ICs
+uint16_t cell_codes[1][12]; //Cell codes (in this format for rdcv)
+uint8_t tx_cfg[1][6]; //Configuration data written to ICs
+int error;
 
 // These variables are used for voltage-related calculations.
 int minCell_i, maxCell_i;
-float minCell_v, maxCell_v, stdev_v;
+float minCell_v, maxCell_v, avgCell_v, stdev_v;
 
 // Bytes to send voltages via CAN
 uint8_t* v_crc;
@@ -73,22 +72,22 @@ float hold_float = 0;
 //LTC6804 Configuration Functions
 void init_cfg() { //Initialize LTC6804 configuration
   //Values for CFGR registers
-  tx_cfg[0] = 0xFE; //Keep reference voltage on (speeds up readings)
-  tx_cfg[1] = 0x00;
-  tx_cfg[2] = 0x00;
-  tx_cfg[3] = 0x00;
-  tx_cfg[4] = 0x00; //Discharge switches initialially deactivated
-  tx_cfg[5] = 0x20; //One minute software timer
+  tx_cfg[0][0] = 0xFE; //Keep reference voltage on (speeds up readings)
+  tx_cfg[0][1] = 0x00;
+  tx_cfg[0][2] = 0x00;
+  tx_cfg[0][3] = 0x00;
+  tx_cfg[0][4] = 0x00; //Discharge switches initialially deactivated
+  tx_cfg[0][5] = 0x20; //One minute software timer
 }
 void balance_cfg(int cell) {
   //Clear discharge switches
-  tx_cfg[4] = 0x00;
-  tx_cfg[5] = tx_cfg[5] & 0xF0;
+  tx_cfg[0][4] = 0x00;
+  tx_cfg[0][5] = tx_cfg[0][5] & 0xF0;
   if (cell >= 0 && cell <= 7) {
-    tx_cfg[4] = tx_cfg[4] | 1 << cell;
+    tx_cfg[0][4] = tx_cfg[0][4] | 1 << cell;
   }
   else if (cell > 7) { //Check if greater than 7, as -1 is used to stop all discharging
-    tx_cfg[5] = tx_cfg[5] | (1 << (cell - 8));
+    tx_cfg[0][5] = tx_cfg[0][5] | (1 << (cell - 8));
   }
 }
 
@@ -206,7 +205,7 @@ for (int i = 0; i < 16; i++) { //or i <= 4
   maxCell_v = 0.0;
   avgCell_v = 0.0;
   for (int i = 0; i < 12; i++) {
-    float v = cell_codes[i] * 0.0001; //Convert voltage to reading
+    float v = cell_codes[0][i] * 0.0001; //Convert voltage to reading
     if (v < minCell_v) {
       minCell_v = v;
     }
@@ -220,7 +219,7 @@ for (int i = 0; i < 16; i++) { //or i <= 4
   //Calculate standard deviation of voltages
   stdev_v = 0.0;
   for (int i = 0; i < 12; i++) {
-    stdev_v += pow(cell_codes[i] * 0.0001 - avgCell_v, 2);
+    stdev_v += pow(cell_codes[0][i] * 0.0001 - avgCell_v, 2);
   }
   stdev_v /= 12;
   stdev_v = pow(stdev_v, 0.5);
@@ -259,7 +258,7 @@ for (int i = 0; i < 16; i++) { //or i <= 4
    for (int i = 0; i < 16; i++) {
     hold_sum = hold_sum + hold_array[i];
    }
-   hold_avg = hold_sum/13;
+   hold_avg = hold_sum/16;
 
   //Calculate standard deviation of temperatures
   stdev_t = 0.0;
@@ -300,16 +299,16 @@ for (int i = 0; i < 16; i++) { //or i <= 4
   avg = (uint8_t*)hold_avg;
 
   //Compute voltage crc
-  v_crc = (uint8_t*) (57 + minCell_v + maxCell_v + avgCell_v + 16+15+8);
+  //v_crc = (uint8_t*) (57 + minCell_v + maxCell_v + avgCell_v + 16+15+8);
 
   //Convert cell voltages to uint8_t
-  v_low = (uint8_t*) minCell_v;
-  v_high = (uint8_t*) maxCell_v;
-  v_avg = (uint8_t*) avgCell_v;
+  v_low = (uint8_t*) ((int)floor(100 * minCell_v));
+  v_high = (uint8_t*) ((int)floor(100 * maxCell_v));
+  v_avg = (uint8_t*) ((int)floor(100 * avgCell_v));
 
   //Convert standard deviations
-  t_stdev = (uint8_t*) stdev_t;
-  v_stdev = (uint8_t*) stdev_v;
+  t_stdev = (uint8_t*) ((int)floor(1000 * stdev_t));
+  v_stdev = (uint8_t*) ((int)floor(1000 * stdev_v));
   
   /*//Set CAN message 2 -> For Orion BMS
   
@@ -342,7 +341,7 @@ for (int i = 0; i < 16; i++) { //or i <= 4
   
   */
 
-  byte dataMessage[8] = {low, high, avg, t_stdev, v_low, v_high, v_avg, v_stdev};
+  byte dataMessage[8] = {(byte)low, (byte)high, (byte)avg, (byte)t_stdev, (byte)v_low, (byte)v_high, (byte)v_avg, (byte)v_stdev};
 
   //send CAN message
   CAN.sendMsgBuf(0x99, 0, 8, dataMessage);
