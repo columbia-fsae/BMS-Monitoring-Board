@@ -51,7 +51,7 @@ uint8_t* v_avg;
 uint8_t* v_stdev;
 
 // Cell balancing threshold
-float CELL_BALANCE_THRESHOLD = 3.9;
+float CELL_BALANCE_THRESHOLD = 2.5;
 
 // Fan enable threshold
 float FAN_THRESHOLD = 40.0; //In degrees Celsius
@@ -60,28 +60,22 @@ float FAN_THRESHOLD = 40.0; //In degrees Celsius
 float hold_float = 0;
 
 
+// FOR ORION BMS ONLY
 //In order to send temperatures to the BMS, the following CAN messages must be sent.
 //Message 2 contains the data that will be calculated from the ADC readings, and
 //will be initialized later.
-byte message1[8] = {0xF3, 0x00, 0x80, 0xF3, 0x00, 0x40, 0x1E, 0x90};
+//byte message1[8] = {0xF3, 0x00, 0x80, 0xF3, 0x00, 0x40, 0x1E, 0x90};
 
-byte message3[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x0F, 0x00};
-byte message4[4];
+//byte message3[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x0F, 0x00};
+//byte message4[4];
 
-//In order to send voltages to the BMS, the following CAN messages must be sent.
-//Message 6 contains the data that will be calculated from the ADC readings, and
-//will be initialized later.
-byte message5[8] = {0xF3, 0x00, 0x80, 0xF3, 0x00, 0x40, 0x1E, 0x90};
-
-byte message7[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x0F, 0x00};
-byte message8[4];
 
 //LTC6804 Configuration Functions
 void init_cfg() { //Initialize LTC6804 configuration
   //Values for CFGR registers
   tx_cfg[0] = 0xFE; //Keep reference voltage on (speeds up readings)
-  tx_cfg[1] = 0x4E1; //2V
-  tx_cfg[2] = 0x8CA; //3.6V
+  tx_cfg[1] = 0x00;
+  tx_cfg[2] = 0x00;
   tx_cfg[3] = 0x00;
   tx_cfg[4] = 0x00; //Discharge switches initialially deactivated
   tx_cfg[5] = 0x20; //One minute software timer
@@ -317,14 +311,13 @@ for (int i = 0; i < 16; i++) { //or i <= 4
   t_stdev = (uint8_t*) stdev_t;
   v_stdev = (uint8_t*) stdev_v;
   
-  //Set CAN message 2 
+  /*//Set CAN message 2 -> For Orion BMS
   
   byte message2[8] = {0x00, low, high, avg, 0x10, 0x0F, 0x00, crc};
 
   //Set CAN message 5
   byte message6[8] = {0x00, v_low, v_high, v_avg, 0x10, 0x0F, 0x00, v_crc};
-
-  //send CAN messages
+  
   //messages 2-4 are sent every 100ms, and message 1 is sent every 200ms
 
   delay(100);
@@ -346,6 +339,13 @@ for (int i = 0; i < 16; i++) { //or i <= 4
   delay(100);
    
   CAN.sendMsgBuf(0x18EEFF80, 1, 8, message5);
+  
+  */
+
+  byte dataMessage[8] = {low, high, avg, t_stdev, v_low, v_high, v_avg, v_stdev};
+
+  //send CAN message
+  CAN.sendMsgBuf(0x99, 0, 8, dataMessage);
 
  
 }
