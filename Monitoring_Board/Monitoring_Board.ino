@@ -27,11 +27,11 @@ float stdev_t;
 
 
 // Only bytes can be sent via CAN. The previous int variables will be converted to uint8_t           
-uint8_t* crc;
-uint8_t* high;
-uint8_t* low;
-uint8_t* avg;
-uint8_t* t_stdev;
+uint8_t crc;
+uint8_t high;
+uint8_t low;
+uint8_t avg;
+uint8_t t_stdev;
 
 // These variables are utilized to store information from the LTC6804
 uint16_t cell_codes[1][12]; //Cell codes (in this format for rdcv)
@@ -43,11 +43,11 @@ int minCell_i, maxCell_i;
 float minCell_v, maxCell_v, avgCell_v, stdev_v;
 
 // Bytes to send voltages via CAN
-uint8_t* v_crc;
-uint8_t* v_high;
-uint8_t* v_low;
-uint8_t* v_avg;
-uint8_t* v_stdev;
+uint8_t v_crc;
+uint8_t v_high;
+uint8_t v_low;
+uint8_t v_avg;
+uint8_t v_stdev;
 
 // Cell balancing threshold
 float CELL_BALANCE_THRESHOLD = 2.5;
@@ -57,6 +57,11 @@ float FAN_THRESHOLD = 40.0; //In degrees Celsius
 
 //Variable used when creating array, needed to use pow() function
 float hold_float = 0;
+
+const float TEMP_MAX = 250;
+const float VOLTAGE_MAX = 5;
+const float TEMP_STDEV_MAX = 25;
+const float VOLTAGE_STDEV_MAX = 5;
 
 
 // FOR ORION BMS ONLY
@@ -94,6 +99,14 @@ void balance_cfg(int cell) {
 //Fan control
 void setFan(bool on) {
   return; //TODO
+}
+
+uint8_t encodeInt(int number, float maxVal) {
+  return (uint8_t) floor(((number) / maxVal) * 0xFF);
+}
+
+uint8_t encodeFloat(float number, float maxVal) {
+  return (uint8_t) floor(((number) / maxVal) * 0xFF);
 }
 
 
@@ -289,26 +302,26 @@ for (int i = 0; i < 16; i++) { //or i <= 4
    
    
   // Compute temperature crc
-  hold_crc = 57 + hold_low + hold_high  + hold_avg + 16 + 15+8;
-  uint8_t* crc = (uint8_t*)hold_crc; 
+  //hold_crc = 57 + hold_low + hold_high  + hold_avg + 16 + 15+8;
+  //uint8_t* crc = (uint8_t*)hold_crc; 
 
   // convert crc, high, low, and avg from int to uint8_t
-  high = (uint8_t*)hold_high;
-  crc = (uint8_t*)hold_crc; 
-  low = (uint8_t*)hold_low;
-  avg = (uint8_t*)hold_avg;
+  high = encodeInt(hold_high, TEMP_MAX);
+  //crc = (uint8_t*)hold_crc; 
+  low = encodeInt(hold_low, TEMP_MAX);
+  avg = encodeInt(hold_avg, TEMP_MAX);
 
   //Compute voltage crc
   //v_crc = (uint8_t*) (57 + minCell_v + maxCell_v + avgCell_v + 16+15+8);
 
   //Convert cell voltages to uint8_t
-  v_low = (uint8_t*) ((int)floor(100 * minCell_v));
-  v_high = (uint8_t*) ((int)floor(100 * maxCell_v));
-  v_avg = (uint8_t*) ((int)floor(100 * avgCell_v));
+  v_low = encodeFloat(minCell_v, VOLTAGE_MAX);
+  v_high = encodeFloat(maxCell_v, VOLTAGE_MAX);
+  v_avg = encodeFloat(avgCell_v, VOLTAGE_MAX);
 
   //Convert standard deviations
-  t_stdev = (uint8_t*) ((int)floor(1000 * stdev_t));
-  v_stdev = (uint8_t*) ((int)floor(1000 * stdev_v));
+  t_stdev = encodeFloat(stdev_t, TEMP_STDEV_MAX);
+  v_stdev = encodeFloat(stdev_v, VOLTAGE_STDEV_MAX);
   
   /*//Set CAN message 2 -> For Orion BMS
   
@@ -341,7 +354,7 @@ for (int i = 0; i < 16; i++) { //or i <= 4
   
   */
 
-  byte dataMessage[8] = {(byte)low, (byte)high, (byte)avg, (byte)t_stdev, (byte)v_low, (byte)v_high, (byte)v_avg, (byte)v_stdev};
+  byte dataMessage[8] = {low, high, avg, t_stdev, v_low, v_high, v_avg, v_stdev};//{(byte)low, (byte)high, (byte)avg, (byte)t_stdev, (byte)v_low, (byte)v_high, (byte)v_avg, (byte)v_stdev};
 
   //send CAN message
   CAN.sendMsgBuf(0x99, 0, 8, dataMessage);
